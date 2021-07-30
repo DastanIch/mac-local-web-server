@@ -1,0 +1,194 @@
+-----------------------------------------------------------------------------------------------------
+
+Установка brew:
+	/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+Экспорт пути для доступа к пакетам из любого места в консоли
+	echo "export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/opt/homebrew/Cellar:~/bin:$PATH" >> ~/.zshrc
+
+Список команд для управления службами brew
+	brew services list - вывести список с информацией доступных служб  
+	brew services start <Название> - запуск службы 
+	brew services restart <Название> - перезапуск службы
+	brew services stop <Название> - остановка службы
+
+-----------------------------------------------------------------------------------------------------
+
+Если вы хотите вызывать из консоли редактирование файла с помощью Sublime:
+	ln -s "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl" /opt/homebrew/bin/sublime
+Использование sublime из консоли
+	sublime <файл>
+
+-----------------------------------------------------------------------------------------------------
+
+Установка php
+	brew install php
+Поменять версию php в консоли
+	brew unlink php  
+	brew link --overwrite --force php@8.0
+Изменение некоторых важных директив в конфигурации php
+/opt/homebrew/etc/php/8.0/php.ini
+		upload_max_filesize = 32M 
+		post_max_size = 48M 
+		memory_limit = 256M 
+		max_execution_time = 600 
+		max_input_vars = 3000 
+		max_input_time = 1000
+Проверка версии
+	php -v  
+
+-----------------------------------------------------------------------------------------------------
+
+Установка mysql
+	brew install mysql
+Задать пароль и настроить уровень защиты
+	mysql_secure_installation
+Запуск клиента mysql
+	mysql -uroot -p<пароль>
+
+-----------------------------------------------------------------------------------------------------
+
+Установка postgresql
+	brew install postgresql
+Запуск клиента postgresql
+	psql postgres
+
+-----------------------------------------------------------------------------------------------------
+
+Установка nginx
+	brew install nginx
+Проверка nginx
+	sudo nginx
+Проверка работы gninx через браузер
+	http://localhost:8080
+нужно изменить порт 8080 на 80 в конфигурации nginx: /opt/homebrew/etc/nginx/nginx.conf
+проверка
+	http://localhost
+Создадим собственный файл конфигурации
+	touch /opt/homebrew/etc/nginx/servers/_localhost.conf 
+
+-----------------------------------------------------------------------------------------------------
+
+Установка dnsmasq
+	brew install dnsmasq
+Настройка dnsmasq для того, чтобы получить свой локальный домен верхнего уровня (.lc)
+	echo 'address=/.lc/127.0.0.1' > /opt/homebrew/etc/dnsmasq.conf
+	sudo brew services start dnsmasq
+	sudo mkdir -v /etc/resolver 
+	sudo touch /etc/resolver/lc 
+	sudo /bin/bash -c 'echo "nameserver 127.0.0.1" >> /etc/resolver/lc'
+Проверка настройки dnsmasq
+	ping test.lc
+
+-----------------------------------------------------------------------------------------------------
+
+Установка mailhog
+	brew install mailhog
+Проверка mailhog
+	mailhog
+Проверка через браузер
+	http://localhost:8025/
+Настройка mailhog
+добавить в конец файла /etc/postfix/main.cf :
+	myhostname = localhost
+	relayhost = [127.0.0.1]:1025
+Проверяем отправку почты с помощью консоли
+	echo "Test email from Postfix" | mail -s "Test Email" hi@example.com
+Настройка php, чтобы php mail работал с mailhog, 
+редактировать директиву php в файле конфигурации /opt/homebrew/etc/php/8.0/php.ini :
+	sendmail_path = /opt/homebrew/Cellar/mailhog/1.0.1/bin/MailHog sendmail test@localhost
+brew services restart php
+-----------------------------------------------------------------------------------------------------
+
+Установка nodejs
+	brew install node
+Проверка версии node
+	node -v 
+
+-----------------------------------------------------------------------------------------------------
+
+Установка composer
+	curl -sS https://getcomposer.org/installer | php
+	mv composer.phar /opt/homebrew/bin/composer
+	echo "export PATH=${PATH}:~/.composer/vendor/bin" >> ~/.zshrc
+Проверка 
+	composer
+
+-----------------------------------------------------------------------------------------------------
+
+Настройка тестового хоста nginx
+
+В наш файл конфигурации /opt/homebrew/etc/nginx/servers/_localhost.conf, вносим следующий код:
+
+server {
+	listen 80;
+	server_name test.lc;
+	root /opt/homebrew/var/www/test;
+	index index.html index.php;
+	location ~ \.php$ {
+        	fastcgi_pass 127.0.0.1:9000;
+        	fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        	include fastcgi_params;
+    	}
+}
+Перезагружаем nginx
+	brew services restart nginx
+Создаем тестовый файл
+	mkdir /opt/homebrew/var/www/test
+	touch /opt/homebrew/var/www/test
+	редактируем файл /opt/homebrew/var/www/test/index.php
+	
+<?php
+	echo 'working!';
+mail('caffeinated@example.com', 'My Subject', '$message');
+?>
+
+Переходим по нашему тестовому сайту http://test.lc, чтобы запустить отправку почты через php
+
+Переходим в браузере в mailhog по адресу http://localhost:8025/ и проверяем почту
+
+-----------------------------------------------------------------------------------------------------
+
+Установка laravel
+	cd /opt/homebrew/var/www 
+	composer create-project laravel/laravel example-app
+В наш файл конфигурации /opt/homebrew/etc/nginx/servers/localhost.conf, добавляем следующий код:
+
+server {
+    listen 80;
+    server_name example.lc;
+    root /opt/homebrew/var/www/example-app;
+    client_max_body_size 256M;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    index index.php;
+
+    charset utf-8;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+
+Перезагружаем nginx
+	brew services restart nginx
+Проверяем npm
+	cd /opt/homebrew/var/www/example-app
+	npm install 
+	npm run dev 
